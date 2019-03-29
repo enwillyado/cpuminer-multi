@@ -944,8 +944,6 @@ extern "C" {
 			if (unlikely(hash[7] < ptarget[7])) {
 				work_set_target_ratio(work, hash);
 				*hashes_done = n - first_nonce + 1;
-				free(ctx0.memory);
-				free(ctx1.memory);
 				return 1;
 			}
 			

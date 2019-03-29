@@ -693,17 +693,25 @@ bool selfTestV4()
 }
 
 extern "C" {
-	void cryptonight_hash(void* output, const void* input, const int height)
-	{
-		struct cryptonight_ctx *ctx = (struct cryptonight_ctx*)malloc(sizeof(struct cryptonight_ctx));
-		cryptonight_hash_ctx((uint8_t*)output, (uint8_t*)input, 76, &ctx, 0);
-		free(ctx);
-	}
 	void cryptonight_test()
 	{
 		selfTestV4();
 	}
 		
+	void cryptonight_hash(void* output, const void* input, const int height)
+	{
+		struct cryptonight_ctx ctx0, ctx1;
+		ctx0.memory = static_cast<uint8_t*>(_mm_malloc(MEMORY * 2, 16));
+		ctx1.memory = NULL;
+
+		struct cryptonight_ctx* ctx[2] = {&ctx0, &ctx1};
+		
+		cryptonight_hash_ctx((uint8_t*)output, (uint8_t*)input, 76, ctx, height);
+
+		free(ctx0.memory);
+		free(ctx1.memory);	
+	}
+	
 	int scanhash_cryptonight(int thr_id, struct work *work, uint32_t max_nonce, uint64_t *hashes_done)
 	{		
 		uint32_t _ALIGN(128) hash[HASH_SIZE / 4];

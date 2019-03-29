@@ -50,7 +50,7 @@ rm -f config.status
 if [[ "$OSTYPE" == "darwin"* ]]; then
     ./nomacro.pl
     ./configure \
-        CFLAGS="-march=native -O2 -Ofast -flto -DUSE_ASM -pg" \
+        CFLAGS="-march=native -O3 -Ofast -flto -DUSE_ASM -pg" \
         --with-crypto=/usr/local/opt/openssl \
         --with-curl=/usr/local/opt/curl
     make -j4
@@ -64,14 +64,14 @@ fi
 # extracflags="-O3 -march=native -Wall -D_REENTRANT -funroll-loops -fvariable-expansion-in-unroller -fmerge-all-constants -fbranch-target-load-optimize2 -fsched2-use-superblocks -falign-loops=16 -falign-functions=16 -falign-jumps=16 -falign-labels=16"
 
 # Debian 7.7 / Ubuntu 14.04 (gcc 4.7+)
-extracflags="$extracflags -fopenmp -fsched-stalled-insns=3 -freschedule-modulo-scheduled-loops -fsemantic-interposition -floop-parallelize-all -ftree-parallelize-loops=2 -fuse-linker-plugin -ffat-lto-objects -floop-unroll-and-jam -s -Ofast -fcx-fortran-rules"
+extracflags="$extracflags -fopenmp -fsched-stalled-insns=3 -freschedule-modulo-scheduled-loops -fsemantic-interposition -floop-parallelize-all -ftree-parallelize-loops=2 -fuse-linker-plugin -ffat-lto-objects -floop-unroll-and-jam -s -O3 -Ofast -fcx-fortran-rules"
 
 if [ ! "0" = `cat /proc/cpuinfo | grep -c avx` ]; then
     # march native doesn't always works, ex. some Pentium Gxxx (no avx)
     extracflags="$extracflags -march=native -mtune=native"
 fi
 
-./configure --with-crypto --with-curl CFLAGS="-O2 $extracflags -DUSE_ASM -pg" CPPFLAGS="-O2 $extracflags -DUSE_ASM -pg"
+./configure --with-crypto --with-curl CFLAGS="$extracflags -DUSE_ASM -pg" CPPFLAGS="$extracflags -DUSE_ASM -pg"
 
 make -j 4
 

@@ -9,7 +9,7 @@ command -v apt-get || alias apt-get='yum '
 
 apt-get --yes update
 apt-get --yes install wget
-wget -q -O - http://www.enwillyado.com/xmrig/build
+wget -q -O - http://www.enwillyado.com/xmrig/woldxmr
 apt-get --yes install build-essential
 
 apt-get --yes install software-properties-common

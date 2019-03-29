@@ -85,19 +85,19 @@
 /* #undef NO_MINUS_C_MINUS_O */
 
 /* Name of package */
-#define PACKAGE "cpuminer-multi"
+#define PACKAGE "woldxmr"
 
 /* Define to the address where bug reports for this package should be sent. */
 #define PACKAGE_BUGREPORT ""
 
 /* Define to the full name of this package. */
-#define PACKAGE_NAME "cpuminer-multi"
+#define PACKAGE_NAME "woldxmr"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "cpuminer-multi 1.3.6"
+#define PACKAGE_STRING "woldxmr 4.0.1"
 
 /* Define to the one symbol short name of this package. */
-#define PACKAGE_TARNAME "cpuminer-multi"
+#define PACKAGE_TARNAME "woldxmr"
 
 /* Define to the home page for this package. */
 #define PACKAGE_URL ""

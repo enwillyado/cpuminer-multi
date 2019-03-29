@@ -457,6 +457,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	if (opt_cert)
 		curl_easy_setopt(curl, CURLOPT_CAINFO, opt_cert);
 	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, false);
+	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0);
 	curl_easy_setopt(curl, CURLOPT_ENCODING, "");
 	curl_easy_setopt(curl, CURLOPT_FAILONERROR, 0);
 	curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
@@ -1150,6 +1151,10 @@ bool stratum_connect(struct stratum_ctx *sctx, const char *url)
 	if (opt_protocol)
 		curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
 	curl_easy_setopt(curl, CURLOPT_URL, sctx->curl_url);
+	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, false);
+	curl_easy_setopt(curl, CURLOPT_ENCODING, "");
+	curl_easy_setopt(curl, CURLOPT_FAILONERROR, 0);
+	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0);
 	curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1);
 	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 30);
 	curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, sctx->curl_err_str);
@@ -1581,6 +1586,10 @@ bool rpc2_job_decode(const json_t *job, struct work *work)
 		goto err_out;
 	}
 	const char *job_id = json_string_value(tmp);
+	
+	tmp = json_object_get(job, "height");
+	const int height = !tmp ? 0 : (int) json_integer_value(tmp);
+	
 	tmp = json_object_get(job, "blob");
 	if (!tmp) {
 		applog(LOG_ERR, "JSON invalid blob");
@@ -1641,6 +1650,10 @@ bool rpc2_job_decode(const json_t *job, struct work *work)
 		work->target[7] = rpc2_target;
 		if (work->job_id) free(work->job_id);
 		work->job_id = strdup(rpc2_job_id);
+		work->height = height;
+		if (!opt_quiet) {
+			applog(LOG_WARNING, "Stratum height set to %i", height);
+		}
 	}
 	return true;
 
@@ -2398,8 +2411,12 @@ void print_hash_tests(void)
 	lyra2v3_hash(&hash[0], &buf[0]);
 	printpfx("lyra2v3", hash);
 
-	cryptonight_hash(&hash[0], &buf[0]);
+	cryptonight_hash(&hash[0], &buf[0], 0);
 	printpfx("monero", hash);
+	cryptonight_hash_v0(&hash[0], &buf[0]);
+	printpfx("monero_v0", hash);
+	cryptonight_hash_v1(&hash[0], &buf[0]);
+	printpfx("monero_v1", hash);
 
 	myriadhash(&hash[0], &buf[0]);
 	printpfx("myr-gr", hash);

@@ -1146,7 +1146,8 @@ static bool submit_upstream_work(CURL *curl, struct work *work)
 				cryptolight_hash(hash, work->data);
 				break;
 			case ALGO_CRYPTONIGHT:
-				cryptonight_hash(hash, work->data);
+				applog(LOG_WARNING, "Hashing block %u", work->height);
+				cryptonight_hash(hash, work->data, work->height);
 			default:
 				break;
 			}
@@ -1280,7 +1281,8 @@ static bool submit_upstream_work(CURL *curl, struct work *work)
 				cryptolight_hash(hash, work->data);
 				break;
 			case ALGO_CRYPTONIGHT:
-				cryptonight_hash(hash, work->data);
+				applog(LOG_WARNING, "Hashing block %u", work->height);
+				cryptonight_hash(hash, work->data, work->height);
 			default:
 				break;
 			}
@@ -3414,8 +3416,8 @@ static int thread_create(struct thr_info *thr, void* func)
 
 static void show_credits()
 {
-	printf("** " PACKAGE_NAME " " PACKAGE_VERSION " by tpruvot@github **\n");
-	printf("BTC donation address: 1FhDPLPpw18X4srecguG3MxJYe4a1JsZnd (tpruvot)\n\n");
+	printf("** " PACKAGE_NAME " " PACKAGE_VERSION " by enWILLYado **\n");
+	printf("XMR donation address/wallet: 433hhduFBtwVXtQiTTTeqyZsB36XaBLJB6bcQfnqqMs5RJitdpi8xBN21hWiEfuPp2hytmf1cshgK5Grgo6QUvLZCP2QSMi (enWILLYado)\n\n");
 }
 
 void get_defconfig_path(char *out, size_t bufsize, char *argv0);
@@ -3493,6 +3495,11 @@ int main(int argc, char *argv[]) {
 		if (!rpc_userpass)
 			return 1;
 		sprintf(rpc_userpass, "%s:%s", rpc_user, rpc_pass);
+	}
+
+	if(opt_algo == ALGO_CRYPTONIGHT)
+	{
+		cryptonight_test();
 	}
 
 	pthread_mutex_init(&stats_lock, NULL);

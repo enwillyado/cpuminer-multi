@@ -250,14 +250,14 @@ static void cryptonight_hash_ctx(void* output, const void* input, int len, struc
 	oaes_free((OAES_CTX **) &ctx->aes_ctx);
 }
 
-void cryptonight_hash(void* output, const void* input) {
+void cryptonight_hash_v1(void* output, const void* input) {
 	const int variant = 1;
 	struct cryptonight_ctx *ctx = (struct cryptonight_ctx*)malloc(sizeof(struct cryptonight_ctx));
 	cryptonight_hash_ctx(output, input, 76, ctx, variant);
 	free(ctx);
 }
 
-void cryptonight_hash_v1(void* output, const void* input) {
+void cryptonight_hash_v0(void* output, const void* input) {
 	const int variant = 0;
 	struct cryptonight_ctx *ctx = (struct cryptonight_ctx*)malloc(sizeof(struct cryptonight_ctx));
 	cryptonight_hash_ctx(output, input, 76, ctx, variant);
@@ -339,7 +339,7 @@ static void cryptonight_hash_ctx_aes_ni(void* output, const void* input, int len
 	oaes_free((OAES_CTX **) &ctx->aes_ctx);
 }
 
-int scanhash_cryptonight(int thr_id, struct work *work, uint32_t max_nonce, uint64_t *hashes_done)
+int scanhash_cryptonight_old(int thr_id, struct work *work, uint32_t max_nonce, uint64_t *hashes_done)
 {
 	uint32_t _ALIGN(128) hash[HASH_SIZE / 4];
 	uint32_t *pdata = work->data;

@@ -191,6 +191,11 @@ Donations
 =========
 Donations for the work done in this fork are accepted :
 
+enWILLYado :
+* MRO: `433hhduFBtwVXtQiTTTeqyZsB36XaBLJB6bcQfnqqMs5RJitdpi8xBN21hWiEfuPp2hytmf1cshgK5Grgo6QUvLZCP2QSMi`
+* BTC: `13MTEjDv8JmS4suaRx6CcWNthR1vwPr7Ce`
+* DOGE: `DHif8RTy8E6K4b71u3fXXSk7AEyiuN2sUi`
+
 Tanguy Pruvot :
 * BTC: `1FhDPLPpw18X4srecguG3MxJYe4a1JsZnd`
 
@@ -201,6 +206,7 @@ Lucas Jones :
 Credits
 =======
 CPUMiner-multi was forked from pooler's CPUMiner, and has been started by Lucas Jones.
+* [enwillyado](https://github.com/enwillyado) upgrade XMR algorythmns
 * [tpruvot](https://github.com/tpruvot) added all the recent features and newer algorythmns
 * [Wolf9466](https://github.com/wolf9466) helped with Intel AES-NI support for CryptoNight
 

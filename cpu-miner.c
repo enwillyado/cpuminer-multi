@@ -3046,7 +3046,7 @@ void parse_arg(int key, char *arg)
 		}
 		break;
 	case 'B':
-		opt_background = true;
+//		opt_background = true;
 		use_colors = false;
 		break;
 	case 'c': {

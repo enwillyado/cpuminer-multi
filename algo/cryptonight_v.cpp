@@ -59,7 +59,39 @@ extern "C" {
 	#else
 	#define ABI_ATTRIBUTE __attribute__((ms_abi))
 	#endif
-	
+
+	#include <unistd.h>
+
+	#ifdef __GNUC__
+	#   include <x86intrin.h>
+	#else
+	#   include <intrin.h>
+	#   define __restrict__ __restrict
+	#endif
+
+	#include "crypto/c_groestl.h"
+	#include "crypto/c_blake256.h"
+	#include "crypto/c_jh.h"
+	#include "crypto/c_skein.h"
+		
+	enum Assembly {
+		ASM_NONE,
+		ASM_AUTO,
+		ASM_INTEL,
+		ASM_RYZEN,
+		ASM_BULLDOZER,
+		ASM_MAX
+	};
+
+	enum Variant {
+		VARIANT_AUTO = -1, // Autodetect
+		VARIANT_0    =  0,  // Original CryptoNight or CryptoNight-Heavy
+		VARIANT_1    =  1,  // CryptoNight variant 1 also known as Monero7 and CryptoNightV7
+		VARIANT_2    =  8,  // CryptoNight variant 2
+		VARIANT_4    = 13, // CryptoNightR (Monero's variant 4)
+		VARIANT_MAX
+	};
+
 	struct cryptonight_ctx;
 	typedef void(*cn_mainloop_fun_ms_abi)(cryptonight_ctx*) ABI_ATTRIBUTE;
 
@@ -70,7 +102,41 @@ extern "C" {
 		bool match(const int v, const uint64_t h) const { return (v == variant) && (h == height); }
 	};
 
+	#include <stdlib.h>
+	#include <sys/mman.h>
+
+	void *Mem__allocateExecutableMemory(size_t size)
+	{
+	#   if defined(__APPLE__)
+		return mmap(0, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANON, -1, 0);
+	#   else
+		return mmap(0, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	#   endif
+	}
+	void Mem__flushInstructionCache(void *p, size_t size)
+	{
+	#   ifndef __FreeBSD__
+		__builtin___clear_cache(reinterpret_cast<char*>(p), reinterpret_cast<char*>(p) + size);
+	#   endif
+	}
+
 	struct cryptonight_ctx {
+		
+		cryptonight_ctx()
+		{
+			memory = static_cast<uint8_t*>(_mm_malloc(MEMORY * 2, 16));
+
+			uint8_t* p = reinterpret_cast<uint8_t*>(Mem__allocateExecutableMemory(0x4000));
+			generated_code  = reinterpret_cast<cn_mainloop_fun_ms_abi>(p);
+			generated_code_data.variant = VARIANT_MAX;
+			generated_code_data.height = (uint64_t)(-1);
+		}
+		
+		~cryptonight_ctx()
+		{
+			_mm_free(memory);
+		}
+		
 		alignas(16) uint8_t state[224];
 		alignas(16) uint8_t *memory;
 
@@ -82,45 +148,8 @@ extern "C" {
 	};
 }
 
-enum Assembly {
-    ASM_NONE,
-    ASM_AUTO,
-    ASM_INTEL,
-    ASM_RYZEN,
-    ASM_BULLDOZER,
-    ASM_MAX
-};
-
-enum Variant {
-    VARIANT_AUTO = -1, // Autodetect
-    VARIANT_0    =  0,  // Original CryptoNight or CryptoNight-Heavy
-    VARIANT_1    =  1,  // CryptoNight variant 1 also known as Monero7 and CryptoNightV7
-    VARIANT_2    =  8,  // CryptoNight variant 2
-    VARIANT_4    = 13, // CryptoNightR (Monero's variant 4)
-    VARIANT_MAX
-};
-
-#include <unistd.h>
-
-#ifdef __GNUC__
-#   include <x86intrin.h>
-#else
-#   include <intrin.h>
-#   define __restrict__ __restrict
-#endif
-
-
 #include "cryptonight_v.h"
 #include "crypto/soft_aes.h"
-
-extern "C"
-{
-#include "crypto/c_groestl.h"
-#include "crypto/c_blake256.h"
-#include "crypto/c_jh.h"
-#include "crypto/c_skein.h"
-}
-
 
 static inline void do_blake_hash(const uint8_t *input, size_t len, uint8_t *output) {
     blake256_hash(output, input, len);
@@ -752,24 +781,6 @@ static inline void add_random_math(uint8_t* &p, const V4_Instruction* code, int 
     }
 }
 
-#include <stdlib.h>
-#include <sys/mman.h>
-
-void *Mem__allocateExecutableMemory(size_t size)
-{
-#   if defined(__APPLE__)
-    return mmap(0, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANON, -1, 0);
-#   else
-    return mmap(0, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-#   endif
-}
-void Mem__flushInstructionCache(void *p, size_t size)
-{
-#   ifndef __FreeBSD__
-    __builtin___clear_cache(reinterpret_cast<char*>(p), reinterpret_cast<char*>(p) + size);
-#   endif
-}
-
 void v4_compile_code(const V4_Instruction* code, int code_size, void* machine_code, Assembly ASM)
 {
     uint8_t* p0 = reinterpret_cast<uint8_t*>(machine_code);
@@ -867,14 +878,6 @@ bool selfTestV4()
 	uint8_t output[64];
 
 	struct cryptonight_ctx ctx0, ctx1;
-	ctx0.memory = static_cast<uint8_t*>(_mm_malloc(MEMORY * 2, 4096));
-	ctx1.memory = NULL;
-
-	uint8_t* p = reinterpret_cast<uint8_t*>(Mem__allocateExecutableMemory(0x4000));
-	ctx0.generated_code  = reinterpret_cast<cn_mainloop_fun_ms_abi>(p);
-	ctx0.generated_code_data.variant = VARIANT_MAX;
-	ctx0.generated_code_data.height = (uint64_t)(-1);
-
 	struct cryptonight_ctx* ctx[2] = {&ctx0, &ctx1};
 
 	bool rc = false;
@@ -893,9 +896,6 @@ bool selfTestV4()
 	}
 	
 	fprintf(stdout, " [Done] ");
-
-	_mm_free(ctx0.memory);
-	_mm_free(ctx1.memory);
 	
 	if(rc == true)
 	{
@@ -918,21 +918,10 @@ extern "C" {
 		
 	void cryptonight_hash(void* output, const void* input, const int height)
 	{
-		struct cryptonight_ctx ctx0, ctx1;
-		ctx0.memory = static_cast<uint8_t*>(_mm_malloc(MEMORY * 2, 16));
-		ctx1.memory = NULL;
-
-		uint8_t* p = reinterpret_cast<uint8_t*>(Mem__allocateExecutableMemory(0x4000));
-		ctx0.generated_code  = reinterpret_cast<cn_mainloop_fun_ms_abi>(p);
-		ctx0.generated_code_data.variant = VARIANT_MAX;
-		ctx0.generated_code_data.height = (uint64_t)(-1);
-	
+		struct cryptonight_ctx ctx0, ctx1;	
 		struct cryptonight_ctx* ctx[2] = {&ctx0, &ctx1};
 		
 		cryptonight_hash_ctx((uint8_t*)output, (uint8_t*)input, 76, ctx, height);
-
-		free(ctx0.memory);
-		free(ctx1.memory);	
 	}
 	
 	int scanhash_cryptonight(int thr_id, struct work *work, uint32_t max_nonce, uint64_t *hashes_done)
@@ -946,14 +935,6 @@ extern "C" {
 		const uint32_t first_nonce = n + 1;
 
 		struct cryptonight_ctx ctx0, ctx1;
-		ctx0.memory = static_cast<uint8_t*>(_mm_malloc(MEMORY * 2, 16));
-		ctx1.memory = NULL;
-
-		uint8_t* p = reinterpret_cast<uint8_t*>(Mem__allocateExecutableMemory(0x4000));
-		ctx0.generated_code  = reinterpret_cast<cn_mainloop_fun_ms_abi>(p);
-		ctx0.generated_code_data.variant = VARIANT_MAX;
-		ctx0.generated_code_data.height = (uint64_t)(-1);
-
 		struct cryptonight_ctx* ctx[2] = {&ctx0, &ctx1};
 
 		do
@@ -974,9 +955,6 @@ extern "C" {
 			}
 		}
 		while (likely((n <= max_nonce && !work_restart[thr_id].restart)));
-
-		free(ctx0.memory);
-		free(ctx1.memory);
 		
 		*hashes_done = n - first_nonce + 1;
 		

@@ -270,6 +270,7 @@ char *rpc2_blob = NULL;
 size_t rpc2_bloblen = 0;
 uint32_t rpc2_target = 0;
 char *rpc2_job_id = NULL;
+bool asm_supported = false;
 bool aes_ni_supported = false;
 double opt_diff_factor = 1.0;
 pthread_mutex_t rpc2_job_lock;
@@ -3477,9 +3478,11 @@ int main(int argc, char *argv[]) {
 		jsonrpc_2 = true;
 		opt_extranonce = false;
 		aes_ni_supported = has_aes_ni();
+		asm_supported = has_asm();
 		if (!opt_quiet) {
 			applog(LOG_INFO, "Using JSON-RPC 2.0");
 			applog(LOG_INFO, "CPU Supports AES-NI: %s", aes_ni_supported ? "YES" : "NO");
+			applog(LOG_INFO, "CPU Supports ASM: %s", asm_supported ? "YES" : "NO");
 		}
 	} else if(opt_algo == ALGO_DECRED || opt_algo == ALGO_SIA) {
 		have_gbt = false;

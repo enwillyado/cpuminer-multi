@@ -66,6 +66,7 @@ cpuminer_SOURCES = \
   algo/c11.c \
   algo/cryptonight.c \
   algo/cryptonight_v.cpp \
+  algo/cryptonightR_template.S \
   algo/cryptolight.c \
   algo/decred.c \
   algo/drop.c \

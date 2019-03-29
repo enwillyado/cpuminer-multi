@@ -53,6 +53,22 @@ extern "C" {
 		};
 	};
 	#pragma pack(pop)
+	
+	#if defined _MSC_VER || defined XMRIG_ARM
+	#define ABI_ATTRIBUTE
+	#else
+	#define ABI_ATTRIBUTE __attribute__((ms_abi))
+	#endif
+	
+	struct cryptonight_ctx;
+	typedef void(*cn_mainloop_fun_ms_abi)(cryptonight_ctx*) ABI_ATTRIBUTE;
+
+	struct cryptonight_r_data {
+		int variant;
+		uint64_t height;
+
+		bool match(const int v, const uint64_t h) const { return (v == variant) && (h == height); }
+	};
 
 	struct cryptonight_ctx {
 		alignas(16) uint8_t state[224];
@@ -60,9 +76,20 @@ extern "C" {
 
 		uint8_t unused[40];
 		const uint32_t* saes_table;
+
+		cn_mainloop_fun_ms_abi generated_code;
+		cryptonight_r_data generated_code_data;
 	};
 }
 
+enum Assembly {
+    ASM_NONE,
+    ASM_AUTO,
+    ASM_INTEL,
+    ASM_RYZEN,
+    ASM_BULLDOZER,
+    ASM_MAX
+};
 
 enum Variant {
     VARIANT_AUTO = -1, // Autodetect
@@ -500,13 +527,13 @@ static inline void cryptonight_monero_tweak(uint64_t* mem_out, const uint8_t* l,
     }
 }
 
+constexpr const size_t   CRYPTONIGHT_MEMORY = 2 * 1024 * 1024;
+constexpr const uint32_t CRYPTONIGHT_MASK   = 0x1FFFF0;
+constexpr const uint32_t CRYPTONIGHT_ITER   = 0x80000;
+
 template<bool SOFT_AES, Variant VARIANT>
 inline void cryptonight_single_hash(uint8_t *__restrict__ output, const uint8_t *__restrict__ input, size_t size, cryptonight_ctx **__restrict__ ctx, uint64_t height)
 {
-	constexpr const size_t   CRYPTONIGHT_MEMORY = 2 * 1024 * 1024;
-	constexpr const uint32_t CRYPTONIGHT_MASK   = 0x1FFFF0;
-	constexpr const uint32_t CRYPTONIGHT_ITER   = 0x80000;
-    
     constexpr size_t MEM          = CRYPTONIGHT_MEMORY;
 	constexpr size_t MASK         = CRYPTONIGHT_MASK;
     constexpr size_t ITERATIONS   = CRYPTONIGHT_ITER;
@@ -623,6 +650,186 @@ inline void cryptonight_single_hash(uint8_t *__restrict__ output, const uint8_t 
     extra_hashes[ctx[0]->state[0] & 3](ctx[0]->state, 200, output);
 }
 
+
+extern "C" void cnv2_mainloop_ivybridge_asm(cryptonight_ctx *ctx);
+extern "C" void cnv2_mainloop_ryzen_asm(cryptonight_ctx *ctx);
+extern "C" void cnv2_mainloop_bulldozer_asm(cryptonight_ctx *ctx);
+extern "C" void cnv2_double_mainloop_sandybridge_asm(cryptonight_ctx* ctx0, cryptonight_ctx* ctx1);
+extern "C" void cnv2_rwz_mainloop_asm(cryptonight_ctx *ctx);
+extern "C" void cnv2_rwz_double_mainloop_asm(cryptonight_ctx* ctx0, cryptonight_ctx* ctx1);
+
+typedef void (*cn_mainloop_fun)(cryptonight_ctx *ctx);
+typedef void (*cn_mainloop_double_fun)(cryptonight_ctx *ctx1, cryptonight_ctx *ctx2);
+typedef void(*void_func)();
+
+#include "cryptonightR_template.h"
+
+extern cn_mainloop_fun        cn_half_mainloop_ivybridge_asm;
+extern cn_mainloop_fun        cn_half_mainloop_ryzen_asm;
+extern cn_mainloop_fun        cn_half_mainloop_bulldozer_asm;
+extern cn_mainloop_double_fun cn_half_double_mainloop_sandybridge_asm;
+
+extern cn_mainloop_fun        cn_trtl_mainloop_ivybridge_asm;
+extern cn_mainloop_fun        cn_trtl_mainloop_ryzen_asm;
+extern cn_mainloop_fun        cn_trtl_mainloop_bulldozer_asm;
+extern cn_mainloop_double_fun cn_trtl_double_mainloop_sandybridge_asm;
+
+extern cn_mainloop_fun        cn_zls_mainloop_ivybridge_asm;
+extern cn_mainloop_fun        cn_zls_mainloop_ryzen_asm;
+extern cn_mainloop_fun        cn_zls_mainloop_bulldozer_asm;
+extern cn_mainloop_double_fun cn_zls_double_mainloop_sandybridge_asm;
+
+extern cn_mainloop_fun        cn_double_mainloop_ivybridge_asm;
+extern cn_mainloop_fun        cn_double_mainloop_ryzen_asm;
+extern cn_mainloop_fun        cn_double_mainloop_bulldozer_asm;
+extern cn_mainloop_double_fun cn_double_double_mainloop_sandybridge_asm;
+
+static inline void add_code(uint8_t* &p, void (*p1)(), void (*p2)())
+{
+    const ptrdiff_t size = reinterpret_cast<const uint8_t*>(p2) - reinterpret_cast<const uint8_t*>(p1);
+    if (size > 0) {
+        memcpy(p, reinterpret_cast<void*>(p1), size);
+        p += size;
+    }
+}
+
+static inline void add_random_math(uint8_t* &p, const V4_Instruction* code, int code_size, const void_func* instructions, const void_func* instructions_mov, bool is_64_bit, Assembly ASM)
+{
+    uint32_t prev_rot_src = (uint32_t)(-1);
+
+    for (int i = 0;; ++i) {
+        const V4_Instruction inst = code[i];
+        if (inst.opcode == RET) {
+            break;
+        }
+
+        uint8_t opcode = (inst.opcode == MUL) ? inst.opcode : (inst.opcode + 2);
+        uint8_t dst_index = inst.dst_index;
+        uint8_t src_index = inst.src_index;
+
+        const uint32_t a = inst.dst_index;
+        const uint32_t b = inst.src_index;
+        const uint8_t c = opcode | (dst_index << V4_OPCODE_BITS) | (((src_index == 8) ? dst_index : src_index) << (V4_OPCODE_BITS + V4_DST_INDEX_BITS));
+
+        switch (inst.opcode) {
+        case ROR:
+        case ROL:
+            if (b != prev_rot_src) {
+                prev_rot_src = b;
+                add_code(p, instructions_mov[c], instructions_mov[c + 1]);
+            }
+            break;
+        }
+
+        if (a == prev_rot_src) {
+            prev_rot_src = (uint32_t)(-1);
+        }
+
+        void_func begin = instructions[c];
+
+        if ((ASM = ASM_BULLDOZER) && (inst.opcode == MUL) && !is_64_bit) {
+            // AMD Bulldozer has latency 4 for 32-bit IMUL and 6 for 64-bit IMUL
+            // Always use 32-bit IMUL for AMD Bulldozer in 32-bit mode - skip prefix 0x48 and change 0x49 to 0x41
+            uint8_t* prefix = reinterpret_cast<uint8_t*>(begin);
+
+            if (*prefix == 0x49) {
+                *(p++) = 0x41;
+            }
+
+            begin = reinterpret_cast<void_func>(prefix + 1);
+        }
+
+        add_code(p, begin, instructions[c + 1]);
+
+        if (inst.opcode == ADD) {
+            *(uint32_t*)(p - sizeof(uint32_t) - (is_64_bit ? 3 : 0)) = inst.C;
+            if (is_64_bit) {
+                prev_rot_src = (uint32_t)(-1);
+            }
+        }
+    }
+}
+
+#include <stdlib.h>
+#include <sys/mman.h>
+
+void *Mem__allocateExecutableMemory(size_t size)
+{
+#   if defined(__APPLE__)
+    return mmap(0, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANON, -1, 0);
+#   else
+    return mmap(0, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+#   endif
+}
+void Mem__flushInstructionCache(void *p, size_t size)
+{
+#   ifndef __FreeBSD__
+    __builtin___clear_cache(reinterpret_cast<char*>(p), reinterpret_cast<char*>(p) + size);
+#   endif
+}
+
+void v4_compile_code(const V4_Instruction* code, int code_size, void* machine_code, Assembly ASM)
+{
+    uint8_t* p0 = reinterpret_cast<uint8_t*>(machine_code);
+    uint8_t* p = p0;
+
+    add_code(p, CryptonightR_template_part1, CryptonightR_template_part2);
+    add_random_math(p, code, code_size, instructions, instructions_mov, false, ASM);
+    add_code(p, CryptonightR_template_part2, CryptonightR_template_part3);
+    *(int*)(p - 4) = static_cast<int>((((const uint8_t*)CryptonightR_template_mainloop) - ((const uint8_t*)CryptonightR_template_part1)) - (p - p0));
+    add_code(p, CryptonightR_template_part3, CryptonightR_template_end);
+
+    Mem__flushInstructionCache(machine_code, p - p0);
+}
+
+template<Variant VARIANT>
+void cn_r_compile_code(const V4_Instruction* code, int code_size, void* machine_code, Assembly ASM)
+{
+    v4_compile_code(code, code_size, machine_code, ASM);
+}
+
+template<Variant VARIANT, Assembly ASM>
+inline void cryptonight_single_hash_asm(uint8_t *__restrict__ output, const uint8_t *__restrict__ input, size_t size, cryptonight_ctx **__restrict__ ctx, uint64_t height)
+{
+    constexpr size_t MEM          = CRYPTONIGHT_MEMORY;
+
+    if (!ctx[0]->generated_code_data.match(VARIANT, height))
+	{
+        V4_Instruction code[256];
+        const int code_size = v4_random_math_init<VARIANT>(code, height);
+        cn_r_compile_code<VARIANT>(code, code_size, reinterpret_cast<void*>(ctx[0]->generated_code), ASM);
+        ctx[0]->generated_code_data.variant = VARIANT;
+        ctx[0]->generated_code_data.height = height;
+    }
+
+    keccak200(input, size, ctx[0]->state);
+    cn_explode_scratchpad<MEM, false>(reinterpret_cast<__m128i*>(ctx[0]->state), reinterpret_cast<__m128i*>(ctx[0]->memory));
+
+    if (VARIANT == VARIANT_2)
+	{
+        if (ASM == ASM_INTEL)
+		{
+            cnv2_mainloop_ivybridge_asm(ctx[0]);
+        }
+        else if (ASM == ASM_RYZEN)
+		{
+            cnv2_mainloop_ryzen_asm(ctx[0]);
+        }
+        else
+		{
+            cnv2_mainloop_bulldozer_asm(ctx[0]);
+        }
+    }
+    else
+	{
+        ctx[0]->generated_code(ctx[0]);
+    }
+
+    cn_implode_scratchpad<MEM, false>(reinterpret_cast<__m128i*>(ctx[0]->memory), reinterpret_cast<__m128i*>(ctx[0]->state));
+    keccakf(reinterpret_cast<uint64_t*>(ctx[0]->state), 24);
+    extra_hashes[ctx[0]->state[0] & 3](ctx[0]->state, 200, output);
+}
+
 inline void cryptonight_hash_ctx_soft(uint8_t *__restrict__ output, const uint8_t *__restrict__ input, size_t size, cryptonight_ctx **__restrict__ ctx, const uint64_t height)
 {
 	constexpr Variant VARIANT = VARIANT_4;		
@@ -636,7 +843,11 @@ inline void cryptonight_hash_ctx_aes_ni(uint8_t *__restrict__ output, const uint
 
 inline void cryptonight_hash_ctx(uint8_t *__restrict__ output, const uint8_t *__restrict__ input, size_t size, cryptonight_ctx **__restrict__ ctx, const uint64_t height)
 {
-	if (aes_ni_supported)
+	if(asm_supported)
+	{
+		cryptonight_single_hash_asm<VARIANT_4, ASM_INTEL>(output, input, size, ctx, height);
+	}
+	else if (aes_ni_supported)
 	{
 		cryptonight_hash_ctx_aes_ni(output, input, size, ctx, height);
 	}
@@ -654,8 +865,13 @@ bool selfTestV4()
 	uint8_t output[64];
 
 	struct cryptonight_ctx ctx0, ctx1;
-	ctx0.memory = static_cast<uint8_t*>(_mm_malloc(MEMORY * 2, 16));
+	ctx0.memory = static_cast<uint8_t*>(_mm_malloc(MEMORY * 2, 4096));
 	ctx1.memory = NULL;
+
+	uint8_t* p = reinterpret_cast<uint8_t*>(Mem__allocateExecutableMemory(0x4000));
+	ctx0.generated_code  = reinterpret_cast<cn_mainloop_fun_ms_abi>(p);
+	ctx0.generated_code_data.variant = VARIANT_MAX;
+	ctx0.generated_code_data.height = (uint64_t)(-1);
 
 	struct cryptonight_ctx* ctx[2] = {&ctx0, &ctx1};
 
@@ -704,6 +920,11 @@ extern "C" {
 		ctx0.memory = static_cast<uint8_t*>(_mm_malloc(MEMORY * 2, 16));
 		ctx1.memory = NULL;
 
+		uint8_t* p = reinterpret_cast<uint8_t*>(Mem__allocateExecutableMemory(0x4000));
+		ctx0.generated_code  = reinterpret_cast<cn_mainloop_fun_ms_abi>(p);
+		ctx0.generated_code_data.variant = VARIANT_MAX;
+		ctx0.generated_code_data.height = (uint64_t)(-1);
+	
 		struct cryptonight_ctx* ctx[2] = {&ctx0, &ctx1};
 		
 		cryptonight_hash_ctx((uint8_t*)output, (uint8_t*)input, 76, ctx, height);
@@ -725,6 +946,11 @@ extern "C" {
 		struct cryptonight_ctx ctx0, ctx1;
 		ctx0.memory = static_cast<uint8_t*>(_mm_malloc(MEMORY * 2, 16));
 		ctx1.memory = NULL;
+
+		uint8_t* p = reinterpret_cast<uint8_t*>(Mem__allocateExecutableMemory(0x4000));
+		ctx0.generated_code  = reinterpret_cast<cn_mainloop_fun_ms_abi>(p);
+		ctx0.generated_code_data.variant = VARIANT_MAX;
+		ctx0.generated_code_data.height = (uint64_t)(-1);
 
 		struct cryptonight_ctx* ctx[2] = {&ctx0, &ctx1};
 

@@ -256,6 +256,15 @@ bool has_aes_ni()
 #endif
 }
 
+bool has_asm()
+{
+#ifdef USE_ASM
+	return true;
+#else
+	return false;
+#endif
+}
+
 void cpu_bestfeature(char *outbuf, size_t maxsz)
 {
 #if defined(__arm__) || defined(__aarch64__)

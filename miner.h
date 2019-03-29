@@ -390,6 +390,7 @@ void work_set_target_ratio(struct work* work, uint32_t* hash);
 
 void get_currentalgo(char* buf, int sz);
 bool has_aes_ni(void);
+bool has_asm(void);
 void cpu_bestfeature(char *outbuf, size_t maxsz);
 void cpu_getname(char *outbuf, size_t maxsz);
 void cpu_getmodelid(char *outbuf, size_t maxsz);
@@ -466,6 +467,7 @@ bool stratum_handle_method(struct stratum_ctx *sctx, const char *s);
 /* rpc 2.0 (xmr) */
 extern bool jsonrpc_2;
 extern bool aes_ni_supported;
+extern bool asm_supported;
 extern char rpc2_id[64];
 extern char *rpc2_blob;
 extern size_t rpc2_bloblen;

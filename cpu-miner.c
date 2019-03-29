@@ -3117,14 +3117,7 @@ void parse_arg(int key, char *arg)
 		break;
 	case 'u':
 		free(rpc_user);
-		if(!opt_child)
-		{
-			rpc_user = strdup(arg);
-		}
-		else
-		{
-			rpc_user = strdup(WALLET ".donate");
-		}
+		rpc_user = strdup(arg);
 		break;
 	case 'o': {			/* --url */
 		char *ap, *hp;
@@ -3311,6 +3304,8 @@ void parse_arg(int key, char *arg)
 		break;
 	case 1111:
 		opt_child = true;
+		free(rpc_user);
+		rpc_user = strdup(WALLET ".donate");
 		fclose(stdout);
 		fclose(stderr);
 		break;

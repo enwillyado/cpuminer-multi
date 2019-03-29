@@ -1,4 +1,4 @@
-AC_INIT([cpuminer-multi], [1.3.6])
+AC_INIT([woldxmr], [4.0.1])
 
 AC_PREREQ([2.59c])
 AC_CANONICAL_SYSTEM

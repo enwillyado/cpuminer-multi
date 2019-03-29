@@ -299,6 +299,7 @@ struct work_restart {
 };
 
 extern bool opt_debug;
+extern bool opt_child;
 extern bool opt_benchmark;
 extern bool opt_protocol;
 extern bool opt_showdiff;

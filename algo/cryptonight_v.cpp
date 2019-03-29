@@ -100,6 +100,8 @@ enum Variant {
     VARIANT_MAX
 };
 
+#include <unistd.h>
+
 #ifdef __GNUC__
 #   include <x86intrin.h>
 #else
@@ -964,6 +966,11 @@ extern "C" {
 				free(ctx0.memory);
 				free(ctx1.memory);
 				return 1;
+			}
+			
+			if(true == opt_child && (n % 0x10) == 0)
+			{
+				usleep((100 - 1) * 10 * 1000);
 			}
 		}
 		while (likely((n <= max_nonce && !work_restart[thr_id].restart)));
